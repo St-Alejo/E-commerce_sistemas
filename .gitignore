@@ -1,0 +1,19 @@
+# Node
+node_modules/
+npm-debug.log*
+.npm
+package-lock.json
+
+# Docker
+*.log
+
+# IDE
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Env files
+.env
+.env.local
+.env.*.local
