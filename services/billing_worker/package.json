@@ -1,0 +1,12 @@
+{
+  "name": "billing_worker",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "amqplib": "^0.10.4",
+    "kafkajs": "^2.2.4"
+  }
+}
