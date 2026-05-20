@@ -1,0 +1,12 @@
+{
+  "name": "order_processor",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "amqplib": "^0.10.5",
+    "kafkajs": "^2.2.4"
+  }
+}
