@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard de Órdenes</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: #0f1117;
+      color: #e2e8f0;
+      min-height: 100vh;
+      padding: 2rem;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    header h1 {
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: #f8fafc;
+    }
+
+    #status-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #ef4444;
+      flex-shrink: 0;
+      transition: background 0.3s;
+    }
+
+    #status-dot.connected { background: #22c55e; }
+
+    #status-text {
+      font-size: 0.85rem;
+      color: #94a3b8;
+    }
+
+    #stats {
+      display: flex;
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+      flex-wrap: wrap;
+    }
+
+    .stat-card {
+      background: #1e2130;
+      border: 1px solid #2d3148;
+      border-radius: 10px;
+      padding: 1rem 1.5rem;
+      min-width: 130px;
+    }
+
+    .stat-card .label { font-size: 0.75rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; }
+    .stat-card .value { font-size: 1.8rem; font-weight: 700; margin-top: 0.25rem; }
+
+    .stat-card.total .value  { color: #60a5fa; }
+    .stat-card.ok .value     { color: #22c55e; }
+    .stat-card.pending .value{ color: #facc15; }
+    .stat-card.failed .value { color: #f87171; }
+
+    .table-wrapper {
+      overflow-x: auto;
+      border-radius: 12px;
+      border: 1px solid #2d3148;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #1e2130;
+    }
+
+    thead tr { background: #252a40; }
+
+    th {
+      padding: 0.85rem 1.2rem;
+      text-align: left;
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: #64748b;
+      white-space: nowrap;
+    }
+
+    td {
+      padding: 0.75rem 1.2rem;
+      font-size: 0.9rem;
+      border-top: 1px solid #2d3148;
+    }
+
+    tr.new-row { animation: fadeIn 0.4s ease; }
+
+    @keyframes fadeIn {
+      from { background: #2d3f5e; }
+      to   { background: transparent; }
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 0.25rem 0.65rem;
+      border-radius: 999px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .badge.pending          { background: #78350f; color: #fde68a; }
+    .badge.PAYMENT_SUCCESS  { background: #14532d; color: #86efac; }
+    .badge.PAYMENT_FAILED   { background: #450a0a; color: #fca5a5; }
+    .badge.STOCK_RESERVED   { background: #14532d; color: #86efac; }
+    .badge.STOCK_OUT_OF_STOCK { background: #450a0a; color: #fca5a5; }
+    .badge.EMAIL_SENT       { background: #1e3a5f; color: #93c5fd; }
+
+    #empty-state {
+      text-align: center;
+      padding: 3rem;
+      color: #475569;
+      font-size: 0.95rem;
+    }
+
+    #empty-state p { margin-top: 0.5rem; }
+  </style>
+</head>
+<body>
+  <header>
+    <div id="status-dot"></div>
+    <h1>Dashboard de Órdenes</h1>
+    <span id="status-text">Conectando...</span>
+  </header>
+
+  <div id="stats">
+    <div class="stat-card total">
+      <div class="label">Total Órdenes</div>
+      <div class="value" id="stat-total">0</div>
+    </div>
+    <div class="stat-card ok">
+      <div class="label">Pagos OK</div>
+      <div class="value" id="stat-ok">0</div>
+    </div>
+    <div class="stat-card failed">
+      <div class="label">Pagos Fallidos</div>
+      <div class="value" id="stat-failed">0</div>
+    </div>
+    <div class="stat-card pending">
+      <div class="label">Pendientes</div>
+      <div class="value" id="stat-pending">0</div>
+    </div>
+  </div>
+
+  <div class="table-wrapper">
+    <table>
+      <thead>
+        <tr>
+          <th>Orden ID</th>
+          <th>Pago</th>
+          <th>Inventario</th>
+          <th>Notificacion</th>
+        </tr>
+      </thead>
+      <tbody id="tbody">
+        <tr id="empty-state">
+          <td colspan="4">
+            <div>Sin órdenes aún.</div>
+            <p>Envía un POST /order para comenzar.</p>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <script>
+    const WS_URL = `ws://${location.hostname}:8080`;
+
+    const statusDot  = document.getElementById('status-dot');
+    const statusText = document.getElementById('status-text');
+    const tbody      = document.getElementById('tbody');
+    const emptyState = document.getElementById('empty-state');
+    const statTotal  = document.getElementById('stat-total');
+    const statOk     = document.getElementById('stat-ok');
+    const statFailed = document.getElementById('stat-failed');
+    const statPending= document.getElementById('stat-pending');
+
+    // Mapa local de estado
+    const state = {};
+
+    function badge(value) {
+      const cls = value === 'pending' ? 'pending' : value;
+      const label = value === 'pending' ? 'pendiente' : value.replace(/_/g, ' ');
+      return `<span class="badge ${cls}">${label}</span>`;
+    }
+
+    function upsertRow(orderId, orderState, isNew = false) {
+      let tr = document.getElementById(`row-${orderId}`);
+      if (!tr) {
+        tr = document.createElement('tr');
+        tr.id = `row-${orderId}`;
+        if (isNew) tr.className = 'new-row';
+        tbody.appendChild(tr);
+        if (emptyState && emptyState.parentNode) {
+          emptyState.remove();
+        }
+      }
+      tr.innerHTML = `
+        <td><strong>#${orderId}</strong></td>
+        <td>${badge(orderState.payment)}</td>
+        <td>${badge(orderState.stock)}</td>
+        <td>${badge(orderState.email)}</td>
+      `;
+    }
+
+    function updateStats() {
+      const orders = Object.values(state);
+      statTotal.textContent  = orders.length;
+      statOk.textContent     = orders.filter(o => o.payment === 'PAYMENT_SUCCESS').length;
+      statFailed.textContent = orders.filter(o => o.payment === 'PAYMENT_FAILED').length;
+      statPending.textContent= orders.filter(o => o.payment === 'pending').length;
+    }
+
+    function handleSnapshot(fullState) {
+      for (const [orderId, orderState] of Object.entries(fullState)) {
+        state[orderId] = orderState;
+        upsertRow(orderId, orderState, false);
+      }
+      updateStats();
+    }
+
+    function handleUpdate(orderId, orderState) {
+      const isNew = !state[orderId];
+      state[orderId] = orderState;
+      upsertRow(orderId, orderState, isNew);
+      updateStats();
+    }
+
+    function connect() {
+      const ws = new WebSocket(WS_URL);
+
+      ws.onopen = () => {
+        statusDot.classList.add('connected');
+        statusText.textContent = 'Conectado';
+      };
+
+      ws.onclose = () => {
+        statusDot.classList.remove('connected');
+        statusText.textContent = 'Desconectado. Reconectando en 3s...';
+        setTimeout(connect, 3000);
+      };
+
+      ws.onerror = () => {
+        statusText.textContent = 'Error de conexión';
+      };
+
+      ws.onmessage = (event) => {
+        let msg;
+        try { msg = JSON.parse(event.data); } catch { return; }
+
+        if (msg.type === 'snapshot') {
+          handleSnapshot(msg.state);
+        } else if (msg.type === 'update') {
+          handleUpdate(msg.order_id, msg.state);
+        }
+      };
+    }
+
+    connect();
+  </script>
+</body>
+</html>

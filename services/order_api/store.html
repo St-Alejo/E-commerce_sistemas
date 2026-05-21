@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tienda E-commerce</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: #f1f5f9;
+      color: #1e293b;
+      min-height: 100vh;
+      padding: 2rem;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 2.5rem;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+
+    header h1 { font-size: 1.8rem; font-weight: 800; color: #0f172a; }
+    header h1 span { color: #6366f1; }
+
+    .header-right { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+
+    #ws-indicator {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.8rem;
+      color: #64748b;
+    }
+
+    #ws-dot {
+      width: 9px; height: 9px;
+      border-radius: 50%;
+      background: #ef4444;
+      transition: background 0.3s;
+    }
+    #ws-dot.connected { background: #22c55e; }
+
+    .dashboard-link {
+      text-decoration: none;
+      background: #6366f1;
+      color: white;
+      padding: 0.5rem 1.2rem;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      transition: background 0.2s;
+    }
+    .dashboard-link:hover { background: #4f46e5; }
+
+    h2 { font-size: 1.1rem; font-weight: 700; margin-bottom: 1rem; color: #334155; }
+
+    /* Catalogo */
+    .catalog {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2.5rem;
+    }
+
+    .product-card {
+      background: white;
+      border: 2px solid #e2e8f0;
+      border-radius: 14px;
+      padding: 1.2rem;
+      cursor: pointer;
+      transition: all 0.15s;
+      user-select: none;
+      text-align: center;
+    }
+    .product-card:hover { border-color: #6366f1; transform: translateY(-2px); box-shadow: 0 4px 16px rgba(99,102,241,0.12); }
+    .product-card.selected { border-color: #6366f1; background: #eef2ff; }
+    .product-card .emoji { font-size: 2.4rem; display: block; margin-bottom: 0.5rem; }
+    .product-card .name { font-weight: 700; font-size: 0.88rem; color: #0f172a; }
+    .product-card .price { font-size: 0.78rem; color: #64748b; margin-top: 0.2rem; }
+
+    /* Formulario */
+    .custom-form {
+      background: white;
+      border: 1px solid #e2e8f0;
+      border-radius: 14px;
+      padding: 1.5rem;
+      margin-bottom: 2.5rem;
+      display: flex;
+      gap: 0.75rem;
+      align-items: flex-end;
+      flex-wrap: wrap;
+    }
+    .custom-form label { font-size: 0.8rem; font-weight: 600; color: #475569; display: block; margin-bottom: 0.35rem; }
+    .custom-form input {
+      border: 1.5px solid #cbd5e1;
+      border-radius: 8px;
+      padding: 0.6rem 0.9rem;
+      font-size: 0.95rem;
+      width: 260px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .custom-form input:focus { border-color: #6366f1; }
+
+    #btn-order {
+      background: #6366f1;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 0.65rem 1.5rem;
+      font-size: 0.95rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.2s;
+      white-space: nowrap;
+    }
+    #btn-order:hover { background: #4f46e5; }
+    #btn-order:disabled { background: #a5b4fc; cursor: not-allowed; }
+
+    /* Toast */
+    #toast {
+      position: fixed;
+      top: 1.5rem;
+      right: 1.5rem;
+      background: #22c55e;
+      color: white;
+      padding: 0.8rem 1.4rem;
+      border-radius: 10px;
+      font-weight: 600;
+      font-size: 0.9rem;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+      opacity: 0;
+      transition: opacity 0.3s;
+      z-index: 999;
+      pointer-events: none;
+      max-width: 320px;
+    }
+    #toast.show { opacity: 1; }
+    #toast.error { background: #ef4444; }
+
+    /* Mis ordenes */
+    .orders-section {
+      background: white;
+      border: 1px solid #e2e8f0;
+      border-radius: 14px;
+      overflow: hidden;
+    }
+
+    .orders-header {
+      padding: 1rem 1.5rem;
+      border-bottom: 1px solid #e2e8f0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .orders-header h2 { margin: 0; }
+
+    #order-count {
+      background: #eef2ff;
+      color: #6366f1;
+      font-size: 0.8rem;
+      font-weight: 700;
+      padding: 0.2rem 0.6rem;
+      border-radius: 999px;
+    }
+
+    table { width: 100%; border-collapse: collapse; }
+    th { padding: 0.75rem 1.5rem; text-align: left; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; color: #94a3b8; background: #f8fafc; }
+    td { padding: 0.85rem 1.5rem; font-size: 0.9rem; border-top: 1px solid #f1f5f9; vertical-align: middle; }
+
+    #empty-msg { padding: 2.5rem; text-align: center; color: #94a3b8; font-size: 0.9rem; }
+
+    /* Badges de estado */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+      padding: 0.25rem 0.7rem;
+      border-radius: 999px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .badge.pending          { background: #fef3c7; color: #92400e; }
+    .badge.PAYMENT_SUCCESS  { background: #dcfce7; color: #15803d; }
+    .badge.PAYMENT_FAILED   { background: #fee2e2; color: #991b1b; }
+    .badge.STOCK_RESERVED   { background: #dcfce7; color: #15803d; }
+    .badge.STOCK_OUT_OF_STOCK { background: #fee2e2; color: #991b1b; }
+    .badge.EMAIL_SENT       { background: #dbeafe; color: #1e40af; }
+    .badge.published        { background: #ede9fe; color: #5b21b6; }
+
+    /* Notificacion flotante de update */
+    .notif-popup {
+      position: fixed;
+      bottom: 1.5rem;
+      right: 1.5rem;
+      background: #1e293b;
+      color: white;
+      padding: 0.9rem 1.3rem;
+      border-radius: 12px;
+      font-size: 0.85rem;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.2);
+      max-width: 300px;
+      opacity: 0;
+      transform: translateY(10px);
+      transition: opacity 0.3s, transform 0.3s;
+      pointer-events: none;
+      z-index: 998;
+    }
+    .notif-popup.show { opacity: 1; transform: translateY(0); }
+    .notif-popup .notif-title { font-weight: 700; margin-bottom: 0.2rem; font-size: 0.8rem; color: #94a3b8; }
+
+    /* Animacion de fila actualizada */
+    @keyframes rowUpdate {
+      0%   { background: #f0fdf4; }
+      100% { background: white; }
+    }
+    tr.updated td { animation: rowUpdate 1s ease; }
+    @keyframes rowNew {
+      0%   { background: #eef2ff; }
+      100% { background: white; }
+    }
+    tr.new-row td { animation: rowNew 0.5s ease; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>Tienda <span>E-commerce</span></h1>
+    <div class="header-right">
+      <div id="ws-indicator">
+        <div id="ws-dot"></div>
+        <span id="ws-label">Conectando...</span>
+      </div>
+      <a class="dashboard-link" href="http://localhost:8081" target="_blank">Panel Admin →</a>
+    </div>
+  </header>
+
+  <h2>Catalogo de Productos</h2>
+  <div class="catalog" id="catalog"></div>
+
+  <h2>Producto personalizado</h2>
+  <div class="custom-form">
+    <div>
+      <label for="custom-item">Nombre del producto</label>
+      <input type="text" id="custom-item" placeholder="Ej: Auriculares Sony" />
+    </div>
+    <button id="btn-order" onclick="createOrder()">Comprar</button>
+  </div>
+
+  <div class="orders-section">
+    <div class="orders-header">
+      <h2>Mis ordenes</h2>
+      <span id="order-count">0</span>
+    </div>
+    <div id="empty-msg">Aun no tienes ordenes. Selecciona un producto y haz click en Comprar.</div>
+    <table id="orders-table" style="display:none">
+      <thead>
+        <tr>
+          <th>Orden</th>
+          <th>Producto</th>
+          <th>Pago</th>
+          <th>Stock</th>
+          <th>Email</th>
+        </tr>
+      </thead>
+      <tbody id="orders-body"></tbody>
+    </table>
+  </div>
+
+  <div id="toast"></div>
+  <div class="notif-popup" id="notif-popup">
+    <div class="notif-title" id="notif-title"></div>
+    <div id="notif-body"></div>
+  </div>
+
+  <script>
+    const WS_URL = 'ws://localhost:8080';
+
+    const PRODUCTS = [
+      { name: 'Laptop Pro',    emoji: '💻', price: '$1,299' },
+      { name: 'Auriculares',   emoji: '🎧', price: '$89'    },
+      { name: 'Smartphone',    emoji: '📱', price: '$799'   },
+      { name: 'Teclado Mec.',  emoji: '⌨️',  price: '$149'  },
+      { name: 'Monitor 27"',   emoji: '🖥️',  price: '$349'  },
+      { name: 'Libro Tecnico', emoji: '📚', price: '$39'    },
+      { name: 'Mouse Gamer',   emoji: '🖱️',  price: '$59'   },
+      { name: 'Webcam HD',     emoji: '📷', price: '$99'    },
+    ];
+
+    // Solo rastreamos las ordenes creadas en ESTA sesion
+    const myOrderIds = new Set();
+    let orderCount = 0;
+    let selectedProduct = null;
+    let notifTimer = null;
+
+    // ── Catalogo ──────────────────────────────────────────
+    const catalog = document.getElementById('catalog');
+    PRODUCTS.forEach(p => {
+      const card = document.createElement('div');
+      card.className = 'product-card';
+      card.innerHTML = `<span class="emoji">${p.emoji}</span><div class="name">${p.name}</div><div class="price">${p.price}</div>`;
+      card.addEventListener('click', () => {
+        document.querySelectorAll('.product-card').forEach(c => c.classList.remove('selected'));
+        card.classList.add('selected');
+        selectedProduct = p.name;
+        document.getElementById('custom-item').value = '';
+      });
+      catalog.appendChild(card);
+    });
+
+    // ── Toast superior ─────────────────────────────────────
+    function showToast(msg, isError = false) {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.className = 'show' + (isError ? ' error' : '');
+      setTimeout(() => { t.className = ''; }, 3000);
+    }
+
+    // ── Notificacion flotante inferior ─────────────────────
+    function showNotif(title, body) {
+      const el = document.getElementById('notif-popup');
+      document.getElementById('notif-title').textContent = title;
+      document.getElementById('notif-body').textContent = body;
+      el.classList.add('show');
+      clearTimeout(notifTimer);
+      notifTimer = setTimeout(() => el.classList.remove('show'), 4000);
+    }
+
+    // ── Badges ─────────────────────────────────────────────
+    function badge(val) {
+      const labels = {
+        pending:              '⏳ Pendiente',
+        PAYMENT_SUCCESS:      '✅ Pago exitoso',
+        PAYMENT_FAILED:       '❌ Pago fallido',
+        STOCK_RESERVED:       '✅ Stock reservado',
+        STOCK_OUT_OF_STOCK:   '❌ Sin stock',
+        EMAIL_SENT:           '📧 Email enviado',
+        published:            '📨 Publicada en Kafka',
+      };
+      return `<span class="badge ${val}">${labels[val] || val}</span>`;
+    }
+
+    // ── Tabla de mis ordenes ───────────────────────────────
+    function ensureRow(orderId, item) {
+      let tr = document.getElementById(`my-order-${orderId}`);
+      if (!tr) {
+        tr = document.createElement('tr');
+        tr.id = `my-order-${orderId}`;
+        tr.className = 'new-row';
+        tr.innerHTML = `
+          <td><strong>#${orderId}</strong></td>
+          <td>${item || '—'}</td>
+          <td class="cell-payment">${badge('pending')}</td>
+          <td class="cell-stock">${badge('pending')}</td>
+          <td class="cell-email">${badge('pending')}</td>
+        `;
+        document.getElementById('orders-body').prepend(tr);
+        document.getElementById('empty-msg').style.display = 'none';
+        document.getElementById('orders-table').style.display = 'table';
+        setTimeout(() => tr.classList.remove('new-row'), 600);
+      }
+      return tr;
+    }
+
+    function updateRow(orderId, state) {
+      const tr = document.getElementById(`my-order-${orderId}`);
+      if (!tr) return;
+      tr.querySelector('.cell-payment').innerHTML = badge(state.payment);
+      tr.querySelector('.cell-stock').innerHTML   = badge(state.stock);
+      tr.querySelector('.cell-email').innerHTML   = badge(state.email);
+      tr.classList.remove('updated');
+      void tr.offsetWidth; // forzar reflow para reiniciar animacion
+      tr.classList.add('updated');
+      setTimeout(() => tr.classList.remove('updated'), 1100);
+    }
+
+    // ── Crear orden ────────────────────────────────────────
+    async function createOrder() {
+      const customVal = document.getElementById('custom-item').value.trim();
+      const item = customVal || selectedProduct;
+      if (!item) { showToast('Selecciona un producto o escribe uno', true); return; }
+
+      const btn = document.getElementById('btn-order');
+      btn.disabled = true;
+      btn.textContent = 'Enviando...';
+
+      try {
+        const res = await fetch('/order', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ item }),
+        });
+        if (!res.ok) { const e = await res.json(); throw new Error(e.error || 'Error'); }
+
+        const order = await res.json();
+
+        // Registrar la orden como mia
+        myOrderIds.add(order.order_id);
+        orderCount++;
+        document.getElementById('order-count').textContent = orderCount;
+
+        // Crear fila con estado inicial
+        ensureRow(order.order_id, order.item);
+
+        showToast(`Orden #${order.order_id} creada — procesando...`);
+        showNotif(`Orden #${order.order_id}`, `"${order.item}" publicada en Kafka. Los servicios estan procesando tu orden...`);
+
+        document.querySelectorAll('.product-card').forEach(c => c.classList.remove('selected'));
+        selectedProduct = null;
+        document.getElementById('custom-item').value = '';
+
+      } catch (err) {
+        showToast(err.message, true);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Comprar';
+      }
+    }
+
+    // ── WebSocket — recibe actualizaciones del dashboard_aggregator ──
+    function notifMessage(orderId, state) {
+      if (state.payment !== 'pending' && state.stock !== 'pending' && state.email !== 'pending') {
+        const ok = state.payment === 'PAYMENT_SUCCESS' && state.stock === 'STOCK_RESERVED';
+        showNotif(
+          ok ? `✅ Orden #${orderId} completada` : `⚠️ Orden #${orderId} con incidencias`,
+          ok
+            ? 'Tu pago fue aprobado, stock reservado y te enviamos un email de confirmacion.'
+            : `Pago: ${state.payment} | Stock: ${state.stock}`
+        );
+      } else if (state.payment !== 'pending') {
+        const msg = state.payment === 'PAYMENT_SUCCESS' ? 'Pago aprobado.' : 'Pago rechazado.';
+        showNotif(`Orden #${orderId}`, msg);
+      }
+    }
+
+    function connectWS() {
+      const ws = new WebSocket(WS_URL);
+      const dot   = document.getElementById('ws-dot');
+      const label = document.getElementById('ws-label');
+
+      ws.onopen = () => {
+        dot.classList.add('connected');
+        label.textContent = 'En vivo';
+      };
+
+      ws.onclose = () => {
+        dot.classList.remove('connected');
+        label.textContent = 'Reconectando...';
+        setTimeout(connectWS, 3000);
+      };
+
+      ws.onmessage = ({ data }) => {
+        let msg;
+        try { msg = JSON.parse(data); } catch { return; }
+
+        if (msg.type === 'snapshot') {
+          // Solo actualizamos filas de ordenes YA creadas en esta sesion
+          for (const [id, state] of Object.entries(msg.state)) {
+            if (myOrderIds.has(Number(id))) {
+              updateRow(Number(id), state);
+            }
+          }
+        } else if (msg.type === 'update') {
+          if (myOrderIds.has(msg.order_id)) {
+            updateRow(msg.order_id, msg.state);
+            notifMessage(msg.order_id, msg.state);
+          }
+        }
+      };
+    }
+
+    connectWS();
+
+    document.getElementById('custom-item').addEventListener('keydown', e => {
+      if (e.key === 'Enter') createOrder();
+    });
+  </script>
+</body>
+</html>

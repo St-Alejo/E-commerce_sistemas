@@ -17,3 +17,7 @@ Thumbs.db
 .env
 .env.local
 .env.*.local
+guia.md
+
+# Carpeta de documentación para exposición (no va al repositorio)
+documentacion/
