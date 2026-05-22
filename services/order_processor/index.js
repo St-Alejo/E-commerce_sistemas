@@ -2,12 +2,12 @@ const amqp = require('amqplib');
 const { Kafka, logLevel } = require('kafkajs');
 
 // [DOCKER: CONFIGURACIÓN]
-const KAFKA_BROKER  = process.env.KAFKA_BROKER  || 'kafka:9092';
-const RABBITMQ_URL  = process.env.RABBITMQ_URL  || 'amqp://guest:guest@rabbitmq:5672';
-const KAFKA_TOPIC   = 'new_orders';
-const KAFKA_GROUP   = 'order_processor_group';
-const EXCHANGE      = 'order_tasks';
-const QUEUES        = ['billing_queue', 'inventory_queue', 'notification_queue'];
+const KAFKA_BROKER  = process.env.KAFKA_BROKER  || 'kafka:9092'; // host kafka
+const RABBITMQ_URL  = process.env.RABBITMQ_URL  || 'amqp://guest:guest@rabbitmq:5672'; // url rabbitmq
+const KAFKA_TOPIC   = 'new_orders';             // canal entrada
+const KAFKA_GROUP   = 'order_processor_group';  // grupo consumidor
+const EXCHANGE      = 'order_tasks';            // distribuidor tareas
+const QUEUES        = ['billing_queue', 'inventory_queue', 'notification_queue']; // colas destino
 
 // [KAFKA: CLIENTE]
 const kafka = new Kafka({
@@ -30,9 +30,9 @@ async function waitForKafka() {
       await admin.connect();
       await admin.listTopics();
       await admin.disconnect();
-      return;
+      return; // kafka listo
     } catch (err) {
-      console.warn(`[order_processor] Kafka no listo: ${err.message}. Reintentando...`);
+      console.warn(`[order_processor] Kafka no listo. Reintentando...`);
       await sleep(2000);
     }
   }
@@ -42,20 +42,20 @@ async function waitForKafka() {
 async function connectRabbitMQ(maxAttempts = 30, delayMs = 2000) {
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      connection = await amqp.connect(RABBITMQ_URL);
-      channel    = await connection.createChannel();
+      connection = await amqp.connect(RABBITMQ_URL); // conectar amqp
+      channel    = await connection.createChannel(); // crear canal
 
       // [RABBITMQ: EXCHANGE]
-      await channel.assertExchange(EXCHANGE, 'fanout', { durable: true });
+      await channel.assertExchange(EXCHANGE, 'fanout', { durable: true }); // exchange fanout (megáfono)
 
       // [RABBITMQ: COLAS]
       for (const queue of QUEUES) {
-        await channel.assertQueue(queue, { durable: true });
-        await channel.bindQueue(queue, EXCHANGE, '');
+        await channel.assertQueue(queue, { durable: true }); // asegurar colas
+        await channel.bindQueue(queue, EXCHANGE, '');        // vincular colas
       }
 
       connection.on('close', () => {
-        console.warn('[order_processor] RabbitMQ desconectado; reconectando...');
+        console.warn('[order_processor] RabbitMQ desconectado. Reconectando...');
         channel    = null;
         connection = null;
         scheduleRabbitReconnect();
@@ -63,10 +63,10 @@ async function connectRabbitMQ(maxAttempts = 30, delayMs = 2000) {
       connection.on('error', (err) =>
         console.error('[order_processor] Error RabbitMQ:', err.message));
 
-      console.log(`[order_processor] RabbitMQ listo — exchange "${EXCHANGE}" (fanout)`);
+      console.log(`[order_processor] RabbitMQ listo`);
       return;
     } catch (err) {
-      console.warn(`[order_processor] RabbitMQ no disponible (${attempt}/${maxAttempts}):`, err.message);
+      console.warn(`[order_processor] RabbitMQ no disponible (${attempt}/${maxAttempts})`);
       if (attempt === maxAttempts) throw err;
       await sleep(delayMs);
     }
@@ -77,22 +77,22 @@ function scheduleRabbitReconnect() {
   setTimeout(async () => {
     try { await connectRabbitMQ(); }
     catch (err) {
-      console.error('[order_processor] Reconexión fallida:', err.message);
+      console.error('[order_processor] Reconexión fallida');
       scheduleRabbitReconnect();
     }
-  }, 3000);
+  }, 3000); // reintento cada 3s
 }
 
 // [RABBITMQ: PUBLICACIÓN]
 function publishToRabbit(order) {
-  if (!channel) throw new Error('Canal RabbitMQ no disponible');
+  if (!channel) throw new Error('RabbitMQ no disponible');
   channel.publish(
     EXCHANGE,
     '',
-    Buffer.from(JSON.stringify(order)),
+    Buffer.from(JSON.stringify(order)), // serializar orden
     {
       contentType: 'application/json',
-      persistent: true,
+      persistent: true, // persistencia en disco
     }
   );
 }
@@ -103,9 +103,9 @@ async function startKafkaConsumer() {
 
   const consumer = kafka.consumer({ groupId: KAFKA_GROUP });
   await consumer.connect();
-  await consumer.subscribe({ topic: KAFKA_TOPIC, fromBeginning: false });
+  await consumer.subscribe({ topic: KAFKA_TOPIC, fromBeginning: false }); // leer nuevos pedidos
 
-  console.log(`[order_processor] Consumiendo "${KAFKA_TOPIC}" (group: ${KAFKA_GROUP})`);
+  console.log(`[order_processor] Puente Kafka -> RabbitMQ activo`);
 
   await consumer.run({
     eachMessage: async ({ message }) => {
@@ -114,17 +114,17 @@ async function startKafkaConsumer() {
 
       let order;
       try {
-        order = JSON.parse(raw);
+        order = JSON.parse(raw); // parsear pedido kafka
       } catch {
-        console.error('[order_processor] JSON inválido, omitiendo');
+        console.error('[order_processor] JSON inválido');
         return;
       }
 
       try {
-        publishToRabbit(order);
-        console.log(`[order_processor] Orden #${order.order_id} enviada al exchange "${EXCHANGE}"`);
+        publishToRabbit(order); // pasar a rabbitmq (fanout)
+        console.log(`[order_processor] Orden #${order.order_id} enviada a RabbitMQ`);
       } catch (err) {
-        console.error(`[order_processor] Error publicando orden #${order.order_id}:`, err.message);
+        console.error(`[order_processor] Error puente:`, err.message);
       }
     },
   });
@@ -132,14 +132,12 @@ async function startKafkaConsumer() {
 
 // [DOCKER: INICIO]
 async function main() {
-  console.log(`[order_processor] Conectando a RabbitMQ (${RABBITMQ_URL})...`);
+  console.log(`[order_processor] Iniciando...`);
   await connectRabbitMQ();
-
-  console.log(`[order_processor] Conectando a Kafka (${KAFKA_BROKER})...`);
-  await startKafkaConsumer();
+  await startKafkaConsumer(); // bucle principal
 }
 
 main().catch((err) => {
-  console.error('[order_processor] Fallo al iniciar:', err);
+  console.error('[order_processor] Fallo:', err);
   process.exit(1);
 });

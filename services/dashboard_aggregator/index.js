@@ -5,15 +5,15 @@ const { WebSocketServer } = require('ws');
 const { Kafka, logLevel }  = require('kafkajs');
 
 // [DOCKER: CONFIGURACIÓN]
-const KAFKA_BROKER = process.env.KAFKA_BROKER || 'kafka:9092';
-const GROUP_ID     = 'dashboard_aggregator_group';
-const TOPICS       = ['billing_events', 'inventory_events', 'notification_events'];
-const WS_PORT      = Number(process.env.WS_PORT)   || 8080;
-const HTTP_PORT    = Number(process.env.HTTP_PORT) || 8081;
+const KAFKA_BROKER = process.env.KAFKA_BROKER || 'kafka:9092'; // host kafka
+const GROUP_ID     = 'dashboard_aggregator_group';              // id grupo consumidor
+const TOPICS       = ['billing_events', 'inventory_events', 'notification_events']; // canales feedback
+const WS_PORT      = Number(process.env.WS_PORT)   || 8080;    // puerto websocket
+const HTTP_PORT    = Number(process.env.HTTP_PORT) || 8081;    // puerto dashboard
 
 // [ESTADO: MEMORIA]
-const ordersState = new Map();
-const wsClients   = new Set();
+const ordersState = new Map(); // estado global (stateful)
+const wsClients   = new Set(); // clientes activos
 
 // [KAFKA: CLIENTE]
 const kafka = new Kafka({
@@ -30,15 +30,15 @@ function stateAsObject() {
   for (const [id, state] of ordersState.entries()) {
     obj[id] = state;
   }
-  return obj;
+  return obj; // convertir map a json
 }
 
 // [WEBSOCKET: DIFUSIÓN]
 function broadcast(message) {
   const data = JSON.stringify(message);
   for (const client of wsClients) {
-    if (client.readyState === 1) {
-      client.send(data);
+    if (client.readyState === 1) { // conexión abierta
+      client.send(data); // empujar datos a navegadores
     }
   }
 }
@@ -46,11 +46,12 @@ function broadcast(message) {
 // [ESTADO: ACTUALIZACIÓN]
 function applyEvent({ order_id, status }) {
   if (!ordersState.has(order_id)) {
-    ordersState.set(order_id, { payment: 'pending', stock: 'pending', email: 'pending' });
+    ordersState.set(order_id, { payment: 'pending', stock: 'pending', email: 'pending' }); // inicializar orden
   }
 
   const state = ordersState.get(order_id);
 
+  // actualizar campos (agregación)
   if (status === 'PAYMENT_SUCCESS' || status === 'PAYMENT_FAILED') {
     state.payment = status;
   } else if (status === 'STOCK_RESERVED' || status === 'STOCK_OUT_OF_STOCK') {
@@ -63,7 +64,7 @@ function applyEvent({ order_id, status }) {
   }
 
   console.log(`[dashboard_aggregator] Orden #${order_id} actualizada:`, state);
-  broadcast({ type: 'update', order_id, state: { ...state } });
+  broadcast({ type: 'update', order_id, state: { ...state } }); // notificar tiempo real
 }
 
 // [KAFKA: CONEXIÓN]
@@ -74,9 +75,9 @@ async function waitForKafka() {
       await admin.connect();
       await admin.listTopics();
       await admin.disconnect();
-      return;
+      return; // kafka disponible
     } catch (err) {
-      console.warn(`[dashboard_aggregator] Kafka no listo: ${err.message}. Reintentando...`);
+      console.warn(`[dashboard_aggregator] Kafka no listo. Reintentando...`);
       await sleep(2000);
     }
   }
@@ -88,9 +89,9 @@ async function startKafkaConsumer() {
 
   const consumer = kafka.consumer({ groupId: GROUP_ID });
   await consumer.connect();
-  await consumer.subscribe({ topics: TOPICS, fromBeginning: false });
+  await consumer.subscribe({ topics: TOPICS, fromBeginning: false }); // suscribir canales feedback
 
-  console.log(`[dashboard_aggregator] Consumiendo: ${TOPICS.join(', ')} (group: ${GROUP_ID})`);
+  console.log(`[dashboard_aggregator] Consumiendo: ${TOPICS.join(', ')}`);
 
   await consumer.run({
     eachMessage: async ({ topic, message }) => {
@@ -98,13 +99,13 @@ async function startKafkaConsumer() {
       if (!raw) return;
       let event;
       try {
-        event = JSON.parse(raw);
+        event = JSON.parse(raw); // parsear evento kafka
       } catch {
         console.error(`[dashboard_aggregator] JSON inválido en ${topic}`);
         return;
       }
 
-      applyEvent(event);
+      applyEvent(event); // procesar y agregar estado
     },
   });
 }
@@ -114,13 +115,13 @@ function startWebSocketServer() {
   const wss = new WebSocketServer({ port: WS_PORT });
 
   wss.on('connection', (ws) => {
-    wsClients.add(ws);
-    console.log(`[dashboard_aggregator] Cliente WS conectado (total: ${wsClients.size})`);
+    wsClients.add(ws); // registrar cliente
+    console.log(`[dashboard_aggregator] Cliente WS conectado`);
 
-    ws.send(JSON.stringify({ type: 'snapshot', state: stateAsObject() }));
+    ws.send(JSON.stringify({ type: 'snapshot', state: stateAsObject() })); // enviar foto actual
 
     ws.on('close', () => {
-      wsClients.delete(ws);
+      wsClients.delete(ws); // remover cliente
     });
 
     ws.on('error', (err) => {
@@ -141,11 +142,11 @@ function startHttpServer() {
       fs.readFile(htmlPath, (err, data) => {
         if (err) {
           res.writeHead(500);
-          res.end('Error al cargar el dashboard');
+          res.end('Error');
           return;
         }
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-        res.end(data);
+        res.end(data); // servir página dashboard
       });
     } else {
       res.writeHead(404); res.end('Not found');
@@ -160,11 +161,11 @@ function startHttpServer() {
 async function main() {
   startWebSocketServer();
   startHttpServer();
-  console.log(`[dashboard_aggregator] Conectando a Kafka en ${KAFKA_BROKER}...`);
-  await startKafkaConsumer();
+  console.log(`[dashboard_aggregator] Iniciando...`);
+  await startKafkaConsumer(); // bucle principal kafka
 }
 
 main().catch((err) => {
-  console.error('[dashboard_aggregator] Fallo al iniciar:', err);
+  console.error('[dashboard_aggregator] Fallo:', err);
   process.exit(1);
 });
