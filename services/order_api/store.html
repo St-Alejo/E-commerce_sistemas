@@ -59,7 +59,6 @@
 
     h2 { font-size: 1.1rem; font-weight: 700; margin-bottom: 1rem; color: #334155; }
 
-    /* Catalogo */
     .catalog {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
@@ -83,7 +82,6 @@
     .product-card .name { font-weight: 700; font-size: 0.88rem; color: #0f172a; }
     .product-card .price { font-size: 0.78rem; color: #64748b; margin-top: 0.2rem; }
 
-    /* Formulario */
     .custom-form {
       background: white;
       border: 1px solid #e2e8f0;
@@ -122,7 +120,6 @@
     #btn-order:hover { background: #4f46e5; }
     #btn-order:disabled { background: #a5b4fc; cursor: not-allowed; }
 
-    /* Toast */
     #toast {
       position: fixed;
       top: 1.5rem;
@@ -143,7 +140,6 @@
     #toast.show { opacity: 1; }
     #toast.error { background: #ef4444; }
 
-    /* Mis ordenes */
     .orders-section {
       background: white;
       border: 1px solid #e2e8f0;
@@ -175,7 +171,6 @@
 
     #empty-msg { padding: 2.5rem; text-align: center; color: #94a3b8; font-size: 0.9rem; }
 
-    /* Badges de estado */
     .badge {
       display: inline-flex;
       align-items: center;
@@ -194,7 +189,6 @@
     .badge.EMAIL_SENT       { background: #dbeafe; color: #1e40af; }
     .badge.published        { background: #ede9fe; color: #5b21b6; }
 
-    /* Notificacion flotante de update */
     .notif-popup {
       position: fixed;
       bottom: 1.5rem;
@@ -215,7 +209,6 @@
     .notif-popup.show { opacity: 1; transform: translateY(0); }
     .notif-popup .notif-title { font-weight: 700; margin-bottom: 0.2rem; font-size: 0.8rem; color: #94a3b8; }
 
-    /* Animacion de fila actualizada */
     @keyframes rowUpdate {
       0%   { background: #f0fdf4; }
       100% { background: white; }
@@ -293,13 +286,11 @@
       { name: 'Webcam HD',     emoji: '📷', price: '$99'    },
     ];
 
-    // Solo rastreamos las ordenes creadas en ESTA sesion
     const myOrderIds = new Set();
     let orderCount = 0;
     let selectedProduct = null;
     let notifTimer = null;
 
-    // ── Catalogo ──────────────────────────────────────────
     const catalog = document.getElementById('catalog');
     PRODUCTS.forEach(p => {
       const card = document.createElement('div');
@@ -314,7 +305,6 @@
       catalog.appendChild(card);
     });
 
-    // ── Toast superior ─────────────────────────────────────
     function showToast(msg, isError = false) {
       const t = document.getElementById('toast');
       t.textContent = msg;
@@ -322,7 +312,6 @@
       setTimeout(() => { t.className = ''; }, 3000);
     }
 
-    // ── Notificacion flotante inferior ─────────────────────
     function showNotif(title, body) {
       const el = document.getElementById('notif-popup');
       document.getElementById('notif-title').textContent = title;
@@ -332,7 +321,6 @@
       notifTimer = setTimeout(() => el.classList.remove('show'), 4000);
     }
 
-    // ── Badges ─────────────────────────────────────────────
     function badge(val) {
       const labels = {
         pending:              '⏳ Pendiente',
@@ -346,7 +334,6 @@
       return `<span class="badge ${val}">${labels[val] || val}</span>`;
     }
 
-    // ── Tabla de mis ordenes ───────────────────────────────
     function ensureRow(orderId, item) {
       let tr = document.getElementById(`my-order-${orderId}`);
       if (!tr) {
@@ -375,12 +362,11 @@
       tr.querySelector('.cell-stock').innerHTML   = badge(state.stock);
       tr.querySelector('.cell-email').innerHTML   = badge(state.email);
       tr.classList.remove('updated');
-      void tr.offsetWidth; // forzar reflow para reiniciar animacion
+      void tr.offsetWidth;
       tr.classList.add('updated');
       setTimeout(() => tr.classList.remove('updated'), 1100);
     }
 
-    // ── Crear orden ────────────────────────────────────────
     async function createOrder() {
       const customVal = document.getElementById('custom-item').value.trim();
       const item = customVal || selectedProduct;
@@ -400,16 +386,14 @@
 
         const order = await res.json();
 
-        // Registrar la orden como mia
         myOrderIds.add(order.order_id);
         orderCount++;
         document.getElementById('order-count').textContent = orderCount;
 
-        // Crear fila con estado inicial
         ensureRow(order.order_id, order.item);
 
         showToast(`Orden #${order.order_id} creada — procesando...`);
-        showNotif(`Orden #${order.order_id}`, `"${order.item}" publicada en Kafka. Los servicios estan procesando tu orden...`);
+        showNotif(`Orden #${order.order_id}`, `"${order.item}" publicada en Kafka.`);
 
         document.querySelectorAll('.product-card').forEach(c => c.classList.remove('selected'));
         selectedProduct = null;
@@ -423,7 +407,6 @@
       }
     }
 
-    // ── WebSocket — recibe actualizaciones del dashboard_aggregator ──
     function notifMessage(orderId, state) {
       if (state.payment !== 'pending' && state.stock !== 'pending' && state.email !== 'pending') {
         const ok = state.payment === 'PAYMENT_SUCCESS' && state.stock === 'STOCK_RESERVED';
@@ -460,7 +443,6 @@
         try { msg = JSON.parse(data); } catch { return; }
 
         if (msg.type === 'snapshot') {
-          // Solo actualizamos filas de ordenes YA creadas en esta sesion
           for (const [id, state] of Object.entries(msg.state)) {
             if (myOrderIds.has(Number(id))) {
               updateRow(Number(id), state);
