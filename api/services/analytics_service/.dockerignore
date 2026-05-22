@@ -1,1 +1,3 @@
+# Evita copiar node_modules locales al contenedor Docker
+# Esto asegura que se usen las dependencias instaladas en el entorno del contenedor
 node_modules

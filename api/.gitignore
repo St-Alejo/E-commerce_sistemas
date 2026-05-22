@@ -1,4 +1,8 @@
+# Ignora las dependencias locales instaladas por npm
 node_modules/
+# Ignora archivos de log generados por errores de npm
 npm-debug.log*
+# Ignora archivos de variables de entorno con información sensible
 .env
+# Ignora archivos de configuración del sistema operativo (macOS)
 .DS_Store

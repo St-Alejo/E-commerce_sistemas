@@ -1,72 +1,80 @@
+# Definición de los servicios que componen la infraestructura del sistema
 services:
+  # Servicio de Mensajería Kafka: actúa como el bus de eventos principal
   kafka:
-    image: bitnamilegacy/kafka:3.7.0
-    container_name: kafka
+    image: bitnamilegacy/kafka:3.7.0 # Imagen de Kafka optimizada por Bitnami
+    container_name: kafka # Nombre del contenedor en Docker
     ports:
-      - "9092:9092"
+      - "9092:9092" # Puerto para la comunicación de datos de Kafka
     environment:
-      - KAFKA_CFG_NODE_ID=0
-      - KAFKA_CFG_PROCESS_ROLES=controller,broker
-      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093
-      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092
-      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
-      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@kafka:9093
-      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
-      - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true
-      - ALLOW_PLAINTEXT_LISTENER=yes
+      - KAFKA_CFG_NODE_ID=0 # ID único del nodo de Kafka
+      - KAFKA_CFG_PROCESS_ROLES=controller,broker # Roles del nodo: controlador y broker de datos
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093 # Puertos de escucha internos
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092 # Dirección que Kafka anuncia a los clientes
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT # Protocolos de seguridad
+      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@kafka:9093 # Configuración del quórum para el controlador
+      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER # Nombre del listener del controlador
+      - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true # Permite crear tópicos automáticamente al enviar mensajes
+      - ALLOW_PLAINTEXT_LISTENER=yes # Permite conexiones sin cifrado (solo desarrollo)
     healthcheck:
+      # Comando para verificar que Kafka esté listo antes de que otros servicios lo usen
       test:
         [
           "CMD-SHELL",
           "/opt/bitnami/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null 2>&1",
         ]
-      interval: 5s
-      timeout: 5s
-      retries: 20
-    networks: [ecommerce-net]
+      interval: 5s # Frecuencia de la verificación
+      timeout: 5s # Tiempo de espera máximo de la verificación
+      retries: 20 # Número de reintentos antes de marcar como fallido
+    networks: [ecommerce-net] # Red interna a la que pertenece
 
+  # Servicio de Mensajería RabbitMQ: usado para la distribución de tareas asíncronas
   rabbitmq:
-    image: rabbitmq:3.13-management
+    image: rabbitmq:3.13-management # Imagen de RabbitMQ con consola de administración
     container_name: rabbitmq
     ports:
-      - "5672:5672"
-      - "15672:15672"
+      - "5672:5672" # Puerto para comunicación AMQP
+      - "15672:15672" # Puerto para la interfaz web de administración
     healthcheck:
+      # Comando para verificar que RabbitMQ esté operativo
       test: ["CMD", "rabbitmq-diagnostics", "ping"]
       interval: 5s
       timeout: 5s
       retries: 20
     networks: [ecommerce-net]
 
+  # Microservicio Order API: Recibe las órdenes de los clientes vía HTTP
   order_api:
-    build: ./services/order_api
+    build: ./services/order_api # Ruta a su Dockerfile
     container_name: order_api
     ports:
-      - "3000:3000"
+      - "3000:3000" # Puerto expuesto para recibir peticiones externas
     environment:
-      KAFKA_BROKER: kafka:9092
-      PORT: "3000"
-      KAFKAJS_NO_PARTITIONER_WARNING: "1"
+      KAFKA_BROKER: kafka:9092 # Dirección del broker de Kafka
+      PORT: "3000" # Puerto interno de la aplicación
+      KAFKAJS_NO_PARTITIONER_WARNING: "1" # Desactiva advertencias de KafkaJS
     depends_on:
       kafka:
-        condition: service_healthy
+        condition: service_healthy # Espera a que Kafka pase el healthcheck
     networks: [ecommerce-net]
-    restart: unless-stopped
+    restart: unless-stopped # Reinicia el contenedor si falla
 
+  # Microservicio Order Processor: Consume de Kafka y distribuye a RabbitMQ
   order_processor:
     build: ./services/order_processor
     container_name: order_processor
     environment:
       KAFKA_BROKER: kafka:9092
-      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672 # URL de conexión a RabbitMQ
     depends_on:
       kafka:
         condition: service_healthy
       rabbitmq:
-        condition: service_healthy
+        condition: service_healthy # Espera a que RabbitMQ pase el healthcheck
     networks: [ecommerce-net]
     restart: unless-stopped
 
+  # Microservicio Analytics Service: Realiza seguimiento de ventas en tiempo real
   analytics_service:
     build: ./services/analytics_service
     container_name: analytics_service
@@ -78,6 +86,7 @@ services:
     networks: [ecommerce-net]
     restart: unless-stopped
 
+# Definición de la red virtual de Docker para la comunicación entre servicios
 networks:
   ecommerce-net:
-    driver: bridge
+    driver: bridge # Tipo de red bridge (puente)

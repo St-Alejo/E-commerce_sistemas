@@ -1,1 +1,3 @@
+# Ignora la carpeta node_modules para evitar que se copie al contenedor
+# Las dependencias se instalarán directamente dentro de la imagen
 node_modules
